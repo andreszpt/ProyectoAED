@@ -2,7 +2,7 @@
  * main.c
  *
  *  Created on: 28 dic. 2020
- *      Author: Andrés Zapata
+ *      Author: AndrÃ©s Zapata
  */
 
 #include<string.h>
@@ -15,6 +15,7 @@ void GPIO_Init();
 
 CAN_HandleTypeDef hcan1;
 TIM_HandleTypeDef htimer6;
+CAN_RxHeaderTypeDef RxHeader;
 
 int main(void)
 {
@@ -27,6 +28,22 @@ int main(void)
 	TIMER6_Init();
 
 	CAN1_Init();
+
+
+	if(HAL_CAN_ActivateNotification(&hcan1,CAN_IT_TX_MAILBOX_EMPTY|CAN_IT_RX_FIFO0_MSG_PENDING|CAN_IT_BUSOFF)!= HAL_OK)
+		{
+				Error_handler();
+		}
+
+
+		if( HAL_CAN_Start(&hcan1) != HAL_OK)
+		{
+			Error_handler();
+		}
+
+		while(1);
+
+		return 0;
 
 }
 
@@ -181,6 +198,59 @@ void GPIO_Init()
 	HAL_GPIO_Init(GPIOB,&GPIOLed);
 }
 
+uint8_t effect=0;
+
+void CAN1_Tx(uint8_t value)
+{
+	CAN_TxHeaderTypeDef TxHeader;
+
+	uint32_t TxMailbox;
+
+	uint32_t message;
+
+	TxHeader.DLC = 8;
+	TxHeader.StdId = 0x5B0;
+	TxHeader.IDE   = CAN_ID_STD;
+	TxHeader.RTR = CAN_RTR_DATA;
+
+	switch(value){
+
+		case 0:
+			message=0x10000; //trama correspondiente a 2^16
+			break;
+		case 1:
+			message=0x10100;
+			break;
+		case 4:
+			message=0x10200;
+			break;
+		case 5:
+			message=0x10300;
+			break;
+		case 6:
+			message=0x10400;
+			break;
+		case 8:
+			if(effect<4){
+				message=0x10001;
+				message &= ~(3<<8);
+				message |= (effect<<8);
+				effect++;
+			}else{
+				message=0x10001;
+				effect=0;
+			}
+			break;
+	}
+
+
+	if( HAL_CAN_AddTxMessage(&hcan1,&TxHeader,&message,&TxMailbox) != HAL_OK)
+	{
+		Error_handler();
+	}
+
+}
+
 
 void CAN1_Init(void)
 {
@@ -203,6 +273,45 @@ void CAN1_Init(void)
 	{
 		Error_handler();
 	}
+
+}
+
+void TIMER6_Init(void)
+{
+	htimer6.Instance = TIM6;
+	htimer6.Init.Prescaler = 4999;
+	htimer6.Init.Period = 10000-1;
+	if( HAL_TIM_Base_Init(&htimer6) != HAL_OK )
+	{
+		Error_handler();
+	}
+
+}
+
+/*void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+		CAN1_Tx();
+}*/
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+	uint32_t rx_msg[32];
+
+	char msg[50];
+
+	if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&RxHeader,rx_msg) != HAL_OK)
+	{
+		Error_handler();
+	}
+
+	if(RxHeader.StdId == 0x5B0 && RxHeader.RTR == 0 )
+	{
+		//This is data frame sent by n1 to n2
+		LED_Manage_Output(rx_msg[0]);
+		sprintf(msg,"Message Received : #%x\r\n",rcvd_msg[0]);
+	}
+
+}
 
 }
 
