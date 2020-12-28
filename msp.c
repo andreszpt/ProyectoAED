@@ -1,9 +1,3 @@
-/*
- * msp.c
- *
- *  Created on: 28 dic. 2020
- *      Author: Admin
- */
 
 
 #include "main.h"
@@ -68,4 +62,5 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htimer)
 	HAL_NVIC_SetPriority(TIM6_DAC_IRQn,15,0);
 
 }
+
 

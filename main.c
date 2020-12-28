@@ -2,7 +2,7 @@
  * main.c
  *
  *  Created on: 28 dic. 2020
- *      Author: Andrés Zapata
+ *      Author: AndrÃ©s Zapata
  */
 
 #include<string.h>
@@ -29,6 +29,7 @@ int main(void)
 
 	CAN1_Init();
 
+
 	if(HAL_CAN_ActivateNotification(&hcan1,CAN_IT_TX_MAILBOX_EMPTY|CAN_IT_RX_FIFO0_MSG_PENDING|CAN_IT_BUSOFF)!= HAL_OK)
 		{
 				Error_handler();
@@ -43,6 +44,7 @@ int main(void)
 		while(1);
 
 		return 0;
+
 }
 
 // Config system clock
@@ -162,7 +164,7 @@ void GPIO_Init()
 	HAL_GPIO_Init(GPIOB,&GPIOBtn);
 
 	// Enable the IRQ and set up the priority (NVIC settings )
-
+	HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 	HAL_NVIC_SetPriority(EXTI0_IRQn,15,0);
 
 	HAL_NVIC_EnableIRQ(EXTI1_IRQn);
@@ -271,6 +273,7 @@ void CAN1_Init(void)
 	{
 		Error_handler();
 	}
+
 }
 
 void TIMER6_Init(void)
@@ -309,3 +312,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	}
 
 }
+
+}
+

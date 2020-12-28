@@ -1,9 +1,4 @@
-/*
- * it.c
- *
- *  Created on: 28 dic. 2020
- *      Author: Admin
- */
+
 #include "main.h"
 
 extern CAN_HandleTypeDef hcan1;
@@ -47,3 +42,4 @@ void EXTI9_5_IRQHandler(void)
 
 	}
 }
+
