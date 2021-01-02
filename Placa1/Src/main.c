@@ -21,10 +21,7 @@ CAN_HandleTypeDef hcan1;
 int main(void)
 {
 	HAL_Init();
-
-
 	GPIO_Init();
-
 	CAN1_Init();
 
 
@@ -50,7 +47,7 @@ void GPIO_Init()
 {
 	__HAL_RCC_GPIOB_CLK_ENABLE();
 
-	GPIO_InitTypeDef GPIOBtn, GPIOLed;
+	GPIO_InitTypeDef GPIOBtn;
 
 	GPIOBtn.Pin = GPIO_PIN_0;
 	GPIOBtn.Mode = GPIO_MODE_IT_FALLING;
@@ -87,26 +84,6 @@ void GPIO_Init()
 	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 	HAL_NVIC_SetPriority(EXTI9_5_IRQn,15,0);
 
-
-
-	GPIOLed.Pin = GPIO_PIN_9;
-	GPIOLed.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIOLed.Speed = GPIO_SPEED_MEDIUM;
-	GPIOLed.Pull = GPIO_NOPULL;
-
-	HAL_GPIO_Init(GPIOB,&GPIOLed);
-
-	GPIOLed.Pin = GPIO_PIN_10;
-	HAL_GPIO_Init(GPIOB,&GPIOLed);
-
-	GPIOLed.Pin = GPIO_PIN_11;
-	HAL_GPIO_Init(GPIOB,&GPIOLed);
-
-	GPIOLed.Pin = GPIO_PIN_12;
-	HAL_GPIO_Init(GPIOB,&GPIOLed);
-
-	GPIOLed.Pin = GPIO_PIN_15;
-	HAL_GPIO_Init(GPIOB,&GPIOLed);
 }
 
 uint8_t effect=0;
