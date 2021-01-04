@@ -9,11 +9,10 @@
 
 extern void CAN1_Tx(uint8_t remote);
 
-void EXTI0_IRQHandler(void)
+void SysTick_Handler (void)
 {
-	CAN1_Tx(0);
-	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
-
+	HAL_IncTick();
+	HAL_SYSTICK_IRQHandler();
 }
 
 void EXTI1_IRQHandler(void)
@@ -45,4 +44,20 @@ void EXTI9_5_IRQHandler(void)
 		HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8);
 
 	}
+}
+
+void EXTI15_10_IRQHandler(void)
+{
+	if(EXTI->PR == 0x1000)
+	{
+		CAN1_Tx(10);
+		HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+	}
+	if(EXTI->PR == 0x4000)
+	{
+		CAN1_Tx(0);
+		HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_15);
+	}
+
+
 }

@@ -26,20 +26,26 @@ void HAL_MspInit(void)
 
 void HAL_CAN_MspInit(CAN_HandleTypeDef *hcan)
 {
-	  GPIO_InitTypeDef GPIO_InitStruct;
+	GPIO_InitTypeDef GPIO_InitStruct;
 
-  __HAL_RCC_CAN1_CLK_ENABLE();
+	__HAL_RCC_CAN1_CLK_ENABLE();
+	__HAL_RCC_GPIOA_CLK_ENABLE();
 
 	/**CAN1 GPIO Configuration
 	PA11     ------> CAN1_RX
 	PA12     ------> CAN1_TX
 	*/
-	GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
+	GPIO_InitStruct.Pin = GPIO_PIN_12;
 	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
 	GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	GPIO_InitStruct.Pin = GPIO_PIN_11;
+	GPIO_InitStruct.Pull = GPIO_PULLUP;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
 
 	HAL_NVIC_SetPriority(CAN1_TX_IRQn,15,0);
 	HAL_NVIC_SetPriority(CAN1_RX0_IRQn,15,0);
@@ -53,7 +59,7 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef *hcan)
 
 }
 
-
+/*
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htimer)
 {
 
@@ -67,3 +73,5 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htimer)
 	HAL_NVIC_SetPriority(TIM6_DAC_IRQn,15,0);
 
 }
+
+*/
