@@ -2,7 +2,7 @@
  * main.c
  *
  *  Created on: 28 dic. 2020
- *      Author: Andrés Zapata
+ *      Author: AndrÃ©s Zapata
  */
 
 #include <stdio.h>
@@ -12,6 +12,7 @@
 
 
 void SystemClock_Config(void);
+
 void GPIO_Init();
 void CAN1_Init();
 void CAN1_Tx(uint8_t value);
@@ -30,6 +31,7 @@ int main(void)
 	HAL_Init();
 
 	SystemClock_Config();
+
 
 	GPIO_Init();
 	CAN1_Init();
@@ -128,7 +130,6 @@ void GPIO_Init()
 	GPIOBtn.Pin = GPIO_PIN_13;
 	HAL_GPIO_Init(GPIOC,&GPIOBtn);
 
-
 	//leds alarm
 	GPIO_InitTypeDef GPIOLed;
 
@@ -145,7 +146,6 @@ void GPIO_Init()
 	HAL_GPIO_Init(GPIOB,&GPIOLed);
 
 
-	// Enable the IRQ and set up the priority (NVIC settings )
 	HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 	HAL_NVIC_SetPriority(EXTI1_IRQn,15,0);
 

@@ -2,7 +2,7 @@
  * msp.c
  *
  *  Created on: 28 dic. 2020
- *      Author: Andrés Zapata
+ *      Author: AndrÃ©s Zapata
  */
 
 #include "main.h"
@@ -58,4 +58,5 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef *hcan)
 	HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
 
 }
+
 

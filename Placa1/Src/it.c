@@ -2,7 +2,7 @@
  * it.c
  *
  *  Created on: 28 dic. 2020
- *      Author: Andrés Zapata
+ *      Author: AndrÃ©s Zapata
  */
 
 #include "main.h"
@@ -18,26 +18,21 @@ void SysTick_Handler (void)
 void EXTI1_IRQHandler(void)
 {
 	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
-
 }
 
 void EXTI2_IRQHandler(void)
 {
 	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
-
 }
 
 void EXTI9_5_IRQHandler(void)
 {
 	if(EXTI->PR==0x10){
 		HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_5);
-
 	}else if(EXTI->PR==0x20){
 		HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_6);
-
 	}else if(EXTI->PR==0x80){
 		HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8);
-
 	}
 }
 

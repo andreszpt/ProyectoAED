@@ -1,10 +1,3 @@
-/*
- * main.c
- *
- *  Created on: 30 dic. 2020
- *      Author: Andrés Zapata
- */
-
 
 #include <stdio.h>
 #include <stdint.h>
@@ -145,7 +138,7 @@ void I2C1_Init()
 	hi2c1.Init.OwnAddress1 = MY_ADDR;
 	hi2c1.Init.ClockSpeed = 400000;
 
-	// El método HAL_I2C_Init entra en Error_handler() si el estado es distinto a HAL_OK
+	// El mÃ©todo HAL_I2C_Init entra en Error_handler() si el estado es distinto a HAL_OK
 	if( HAL_I2C_Init(&hi2c1) != HAL_OK)
 	{
 		Error_handler();
@@ -359,3 +352,4 @@ void Error_handler()
 {
 	while(1);
 }
+

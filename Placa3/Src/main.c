@@ -1,10 +1,3 @@
-/*
- * main.c
- *
- *  Created on: 30 dic. 2020
- *      Author: Andrés Zapata
- */
-
 
 #include <stdio.h>
 #include <stdint.h>
