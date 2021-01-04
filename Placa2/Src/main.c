@@ -1,10 +1,3 @@
-/*
- * main.c
- *
- *  Created on: 30 dic. 2020
- *      Author: Andrés Zapata
- */
-
 
 #include <stdio.h>
 #include <stdint.h>
@@ -14,16 +7,19 @@
 #define MY_ADDR 0x0
 #define SLAVE_ADDR  0x1
 
+void CAN1_Init();
+void CAN_Filter_Config(void);
+void CAN1_Tx();
+void I2C1_Init();
+void GPIO_Init();
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c);
+void Error_handler();
+void SystemClock_Config(void);
+
 I2C_HandleTypeDef hi2c1;
 CAN_HandleTypeDef hcan1;
 CAN_RxHeaderTypeDef RxHeader;
-
-void CAN1_Init();
-void CAN_Filter_Config(void);
-void I2C1_Init();
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
-void Error_handler();
-void SystemClock_Config(void);
 
 int main(void)
 {
@@ -91,39 +87,6 @@ void SystemClock_Config(void)
   }
 }
 
-void GPIO_Init()
-{
-	__HAL_RCC_GPIOC_CLK_ENABLE();
-
-	GPIO_InitTypeDef GPIOBtn;
-
-
-	GPIOBtn.Pin = GPIO_PIN_13;
-	GPIOBtn.Mode = GPIO_MODE_IT_FALLING;
-	GPIOBtn.Pull = GPIO_NOPULL;
-	GPIOBtn.Speed = GPIO_SPEED_MEDIUM;
-
-	// user btn
-	HAL_GPIO_Init(GPIOC,&GPIOBtn);
-
-	//leds alarm
-
-		GPIO_InitTypeDef GPIOLed;
-
-		GPIOLed.Pin = GPIO_PIN_0;
-		GPIOLed.Mode = GPIO_MODE_OUTPUT_PP;
-		GPIOLed.Speed = GPIO_SPEED_MEDIUM;
-		GPIOLed.Pull = GPIO_NOPULL;
-
-		HAL_GPIO_Init(GPIOB,&GPIOLed);
-
-		GPIOLed.Pin = GPIO_PIN_7;
-		HAL_GPIO_Init(GPIOB,&GPIOLed);
-		GPIOLed.Pin = GPIO_PIN_14;
-		HAL_GPIO_Init(GPIOB,&GPIOLed);
-
-}
-
 void CAN1_Init()
 {
 	hcan1.Instance = CAN1;
@@ -155,8 +118,8 @@ void CAN_Filter_Config(void)
 	can1_filter_init.FilterActivation = ENABLE;
 	can1_filter_init.FilterBank  = 0;
 	can1_filter_init.FilterFIFOAssignment = CAN_RX_FIFO0;
-	can1_filter_init.FilterIdHigh = 0x5B0;
-	//can1_filter_init.FilterIdLow = 0x5B0;
+	can1_filter_init.FilterIdHigh = 0x0000;
+	can1_filter_init.FilterIdLow = 0x0000;
 	can1_filter_init.FilterMode = CAN_FILTERMODE_IDLIST;
 	can1_filter_init.FilterScale = CAN_FILTERSCALE_32BIT;
 
@@ -175,36 +138,45 @@ void I2C1_Init()
 	hi2c1.Init.OwnAddress1 = MY_ADDR;
 	hi2c1.Init.ClockSpeed = 400000;
 
-	HAL_I2C_Init (&hi2c1);
-
-
-}
-
-void CAN1_Tx()
-{
-	CAN_TxHeaderTypeDef TxHeader;
-
-	uint32_t TxMailbox;
-
-	uint8_t message[8];
-
-	TxHeader.DLC = 8;
-	TxHeader.StdId = 0x5A0;
-	TxHeader.IDE   = CAN_ID_STD;
-	TxHeader.RTR = CAN_RTR_DATA;
-
-			// alarma
-			message[0]=0x2;
-			message[1]=0x0;
-			message[2]=0x1;
-
-
-
-	if( HAL_CAN_AddTxMessage(&hcan1,&TxHeader,&message,&TxMailbox) != HAL_OK)
+	// El mÃ©todo HAL_I2C_Init entra en Error_handler() si el estado es distinto a HAL_OK
+	if( HAL_I2C_Init(&hi2c1) != HAL_OK)
 	{
 		Error_handler();
 	}
 
+
+
+}
+
+void GPIO_Init()
+{
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+
+	GPIO_InitTypeDef GPIOBtn;
+
+	GPIOBtn.Pin = GPIO_PIN_13;
+	GPIOBtn.Mode = GPIO_MODE_IT_FALLING;
+	GPIOBtn.Pull = GPIO_NOPULL;
+	GPIOBtn.Speed = GPIO_SPEED_MEDIUM;
+
+	// user btn
+	HAL_GPIO_Init(GPIOC,&GPIOBtn);
+
+	//leds alarm
+	GPIO_InitTypeDef GPIOLed;
+
+	GPIOLed.Pin = GPIO_PIN_0;
+	GPIOLed.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIOLed.Speed = GPIO_SPEED_MEDIUM;
+	GPIOLed.Pull = GPIO_NOPULL;
+
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
+
+	GPIOLed.Pin = GPIO_PIN_7;
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
+	GPIOLed.Pin = GPIO_PIN_14;
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
 
 }
 
@@ -221,8 +193,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 	if(RxHeader.StdId == 0x5B0 && RxHeader.RTR == 0 )
 	{
-		// Recibo info de placa 1, transmito a placa 2
-
 		// single led
 		if (rx_msg[0] == 0x0)
 		{
@@ -292,6 +262,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 				if (rx_msg[2] == 0x1)
 				{
 					tx_data = 0x2D; // 00101101
+					HAL_CAN_Stop(hcan);
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
 				}
 			}
 		}
@@ -311,30 +285,71 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 }
 
-void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
+void CAN1_Tx()
 {
-	uint8_t rx_msg;
+	CAN_TxHeaderTypeDef TxHeader;
 
-		if(HAL_I2C_Master_Receive_IT(&hi2c1, (uint8_t *)rx_msg, sizeof(rx_msg)) != HAL_OK)
-		{
-			/* Transfer error in transmission process */
-			Error_handler();
-		}
+	uint32_t TxMailbox;
 
-		 if ((rx_msg & 0x1) == 0x1) //alarm
-		{
-			  HAL_CAN_Stop(hcan1);
-			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
-			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
-			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
-			  CAN1_Tx();
-		}
+	uint8_t message[8];
+
+	TxHeader.DLC = 8;
+	TxHeader.StdId = 0x5A0;
+	TxHeader.IDE   = CAN_ID_STD;
+	TxHeader.RTR = CAN_RTR_DATA;
+
+	// alarma
+	message[0]=0x2;
+	message[1]=0x0;
+	message[2]=0x1;
+
+	HAL_CAN_Stop(hcan1);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
+
+
+
+	if( HAL_CAN_AddTxMessage(&hcan1,&TxHeader,&message,&TxMailbox) != HAL_OK)
+	{
+		Error_handler();
+	}
+
 
 }
 
 
+
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+	uint8_t rx_msg;
+
+	if(HAL_I2C_Master_Receive_IT(&hi2c1, (uint8_t *)rx_msg, sizeof(rx_msg)) != HAL_OK)
+	{
+		/* Transfer error in transmission process */
+		Error_handler();
+	}
+
+	 if ((rx_msg & 0x1) == 0x1) //alarm
+	{
+		CAN1_Tx();
+	}
+
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	CAN1_Tx();
+
+	uint8_t tx_data = 0x23; // 00100011 (Alarma)
+	if(HAL_I2C_Master_Transmit_IT(&hi2c1, SLAVE_ADDR, &tx_data, sizeof(tx_data)) != HAL_OK)
+	{
+		Error_handler();
+	}
+}
 
 void Error_handler()
 {
 	while(1);
 }
+

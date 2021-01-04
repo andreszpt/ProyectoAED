@@ -2,7 +2,7 @@
  * msp.c
  *
  *  Created on: 30 dic. 2020
- *      Author: Andrés Zapata
+ *      Author: AndrÃ©s Zapata
  */
 
 #include "main.h"
@@ -62,5 +62,14 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef *htimer)
 
 	//3. setup the priority for TIM6_DAC_IRQn
 	HAL_NVIC_SetPriority(TIM6_DAC_IRQn,15,0);
+
+	//1. enable the clock for the TIM7 peripheral
+	__HAL_RCC_TIM7_CLK_ENABLE();
+
+	//2. Enable the IRQ of TIM7
+	HAL_NVIC_EnableIRQ(TIM7_IRQn);
+
+	//3. setup the priority for TIM7_IRQn
+	HAL_NVIC_SetPriority(TIM7_IRQn,15,0);
 
 }

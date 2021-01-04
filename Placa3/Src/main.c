@@ -1,23 +1,19 @@
-/*
- * main.c
- *
- *  Created on: 30 dic. 2020
- *      Author: Andrés Zapata
- */
-
 
 #include <stdio.h>
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 #include "main.h"
 
-#define MY_ADDR 0x0
-#define SLAVE_ADDR  0x1
+#define MY_ADDR 0x1
+#define MASTER_ADDR  0x0
 
 void SystemClock_Config(void);
 void GPIO_Init();
 void I2C1_Init();
 void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c);
+void TIMER6_Init(void);
+void TIMER7_Init(void);
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void Error_handler(void);
 
 
@@ -29,6 +25,7 @@ TIM_HandleTypeDef htimer7;
 uint8_t efecto;
 uint8_t efecto_on;
 uint8_t cont=0;
+
 
 int main(void)
 {
@@ -93,6 +90,7 @@ void SystemClock_Config(void)
 void GPIO_Init()
 {
 	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
 
 	GPIO_InitTypeDef GPIOLed;
 
@@ -123,6 +121,17 @@ void GPIO_Init()
 	HAL_GPIO_Init(GPIOB,&GPIOLed);
 	GPIOLed.Pin = GPIO_PIN_14;
 	HAL_GPIO_Init(GPIOB,&GPIOLed);
+
+
+	// user btn
+	GPIO_InitTypeDef GPIOBtn;
+
+	GPIOBtn.Pin = GPIO_PIN_13;
+	GPIOBtn.Mode = GPIO_MODE_IT_FALLING;
+	GPIOBtn.Pull = GPIO_NOPULL;
+	GPIOBtn.Speed = GPIO_SPEED_MEDIUM;
+
+	HAL_GPIO_Init(GPIOC,&GPIOBtn);
 }
 
 void I2C1_Init()
@@ -141,7 +150,6 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
 	uint8_t rx_msg;
 
-
 	if(HAL_I2C_Slave_Receive_IT(&hi2c1, (uint8_t *)rx_msg, sizeof(rx_msg)) != HAL_OK)
 	{
 		/* Transfer error in transmission process */
@@ -151,7 +159,6 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
 	if ((rx_msg & 0x3) == 0x0) //single led
 	{
 		efecto_on=0;
-
 		if ((rx_msg & 0x1C) == 0x0) // led 0
 		{
 			if ((rx_msg & 0x20) == 0x1)
@@ -191,7 +198,6 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
 	else if ((rx_msg & 0x3) == 0x1) //effect
 	{
 		efecto_on=1;
-
 		if ((rx_msg & 0x1C) == 0x0) // effect 0
 		{
 			efecto=0;
@@ -212,7 +218,11 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
 	else if ((rx_msg & 0x3) == 0x2) //alarm
 	{
 		efecto_on=0;
-
+		HAL_TIM_Base_Stop_IT(&htimer6);
+		HAL_TIM_Base_Stop_IT(&htimer7);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
 	}
 
 }
@@ -268,7 +278,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 				/* Transfer error in transmission process */
 				Error_handler();
 			}
-
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
 		}
 		else
 		{
@@ -283,10 +295,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			switch (efecto)
 			{
 
-			case 0:
+			case 0:		//efecto 0
 				switch(cont)
 				{
-				case 0:
+				case 0:		// iteracion 0
 					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_SET);
 					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
 					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
@@ -410,8 +422,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 				efecto=0;
 				break;
 			}
-
-
 		}
 	}
 }
