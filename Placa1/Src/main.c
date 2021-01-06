@@ -1,29 +1,30 @@
-/*
- * main.c
- *
- *  Created on: 28 dic. 2020
- *      Author: AndrÃ©s Zapata
- */
-
 #include <stdio.h>
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 #include "main.h"
 
+#define MY_ADDR 0x1
+#define MASTER_ADDR  0x0
 
 void SystemClock_Config(void);
-
 void GPIO_Init();
-void CAN1_Init();
-void CAN1_Tx(uint8_t value);
-void CAN_Filter_Config(void);
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
-void Error_handler();
+void I2C1_Init();
+void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c);
+void TIMER6_Init(void);
+void TIMER7_Init(void);
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+void Error_handler(void);
 
-CAN_RxHeaderTypeDef RxHeader;
-CAN_HandleTypeDef hcan1;
-uint8_t effect=0;
+
+I2C_HandleTypeDef hi2c1;
+uint8_t RxBuffer;
+TIM_HandleTypeDef htimer6;
+TIM_HandleTypeDef htimer7;
+
+// Variables para controlar los efectos
+uint8_t efecto;
+uint8_t efecto_on;
+uint8_t cont=0;
 
 
 int main(void)
@@ -32,23 +33,15 @@ int main(void)
 
 	SystemClock_Config();
 
-
+	// Inicializaciones de los periféricos GPIO, I2C, TIM6, TIM7
 	GPIO_Init();
-	CAN1_Init();
-	CAN_Filter_Config();
+	I2C1_Init();
+	TIMER6_Init();
+	TIMER7_Init();
 
-
-	if(HAL_CAN_ActivateNotification(&hcan1,CAN_IT_TX_MAILBOX_EMPTY|CAN_IT_RX_FIFO0_MSG_PENDING|CAN_IT_BUSOFF)!= HAL_OK)
-	{
-		Error_handler();
-	}
-
-
-	if( HAL_CAN_Start(&hcan1) != HAL_OK)
-	{
-		Error_handler();
-	}
-
+	// Activamos los timers
+	HAL_TIM_Base_Start_IT(&htimer6);
+	HAL_TIM_Base_Start_IT(&htimer7);
 
 	while(1);
 
@@ -56,7 +49,7 @@ int main(void)
 
 }
 
-
+// Configuración del reloj
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -95,255 +88,354 @@ void SystemClock_Config(void)
   }
 }
 
+
 void GPIO_Init()
 {
-	__HAL_RCC_GPIOB_CLK_ENABLE();
 	__HAL_RCC_GPIOC_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
 
-	GPIO_InitTypeDef GPIOBtn;
-
-
-	GPIOBtn.Pin = GPIO_PIN_15;
-	GPIOBtn.Mode = GPIO_MODE_IT_FALLING;
-	GPIOBtn.Pull = GPIO_NOPULL;
-	GPIOBtn.Speed = GPIO_SPEED_MEDIUM;
-
-	HAL_GPIO_Init(GPIOB,&GPIOBtn);
-
-	GPIOBtn.Pin = GPIO_PIN_1;
-	HAL_GPIO_Init(GPIOB,&GPIOBtn);
-
-	GPIOBtn.Pin = GPIO_PIN_4;
-	HAL_GPIO_Init(GPIOB,&GPIOBtn);
-
-	GPIOBtn.Pin = GPIO_PIN_5;
-	HAL_GPIO_Init(GPIOB,&GPIOBtn);
-
-	GPIOBtn.Pin = GPIO_PIN_6;
-	HAL_GPIO_Init(GPIOB,&GPIOBtn);
-
-	GPIOBtn.Pin = GPIO_PIN_8;
-	HAL_GPIO_Init(GPIOB,&GPIOBtn);
-
-
-	// user btn
-	GPIOBtn.Pin = GPIO_PIN_13;
-	HAL_GPIO_Init(GPIOC,&GPIOBtn);
-
-	//leds alarm
 	GPIO_InitTypeDef GPIOLed;
 
-	GPIOLed.Pin = GPIO_PIN_0;
+	// External LEDs
+	GPIOLed.Pin = GPIO_PIN_9;
 	GPIOLed.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIOLed.Speed = GPIO_SPEED_MEDIUM;
 	GPIOLed.Pull = GPIO_NOPULL;
 
 	HAL_GPIO_Init(GPIOB,&GPIOLed);
 
+	GPIOLed.Pin = GPIO_PIN_10;
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
+
+	GPIOLed.Pin = GPIO_PIN_11;
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
+
+	GPIOLed.Pin = GPIO_PIN_12;
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
+
+	GPIOLed.Pin = GPIO_PIN_15;
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
+
+
+	// Board LEDs (alarms)
+	GPIOLed.Pin = GPIO_PIN_0;
+	HAL_GPIO_Init(GPIOB,&GPIOLed);
 	GPIOLed.Pin = GPIO_PIN_7;
 	HAL_GPIO_Init(GPIOB,&GPIOLed);
 	GPIOLed.Pin = GPIO_PIN_14;
 	HAL_GPIO_Init(GPIOB,&GPIOLed);
 
 
-	HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-	HAL_NVIC_SetPriority(EXTI1_IRQn,15,0);
+	// User button
+	GPIO_InitTypeDef GPIOBtn;
 
-	HAL_NVIC_EnableIRQ(EXTI4_IRQn);
-	HAL_NVIC_SetPriority(EXTI4_IRQn,15,0);
+	GPIOBtn.Pin = GPIO_PIN_13;
+	GPIOBtn.Mode = GPIO_MODE_IT_FALLING;
+	GPIOBtn.Pull = GPIO_NOPULL;
+	GPIOBtn.Speed = GPIO_SPEED_MEDIUM;
 
-	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
-	HAL_NVIC_SetPriority(EXTI9_5_IRQn,15,0);
-
-	HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-	HAL_NVIC_SetPriority(EXTI15_10_IRQn,15,0);
-
-
+	HAL_GPIO_Init(GPIOC,&GPIOBtn);
 }
 
 
-
-void CAN1_Init()
+void I2C1_Init()
 {
-	hcan1.Instance = CAN1;
-	hcan1.Init.Mode = CAN_MODE_NORMAL;
-	hcan1.Init.AutoBusOff = ENABLE;
-	hcan1.Init.AutoRetransmission = ENABLE;
-	hcan1.Init.AutoWakeUp = DISABLE;
-	hcan1.Init.ReceiveFifoLocked = DISABLE;
-	hcan1.Init.TimeTriggeredMode = DISABLE;
-	hcan1.Init.TransmitFifoPriority = DISABLE;
+	hi2c1.Instance = I2C1;
+	hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+	hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+	hi2c1.Init.OwnAddress1 = 0x1;
+	hi2c1.Init.ClockSpeed = 400000;
 
-	//Settings related to CAN bit timings
-	hcan1.Init.Prescaler = 3;
-	hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-	hcan1.Init.TimeSeg1 = CAN_BS1_11TQ;
-	hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
+	HAL_I2C_Init (&hi2c1);
 
-	if ( HAL_CAN_Init (&hcan1) != HAL_OK)
+}
+
+void TIMER6_Init(void)
+{
+	/*
+	 * Timer_clk = 84MHz
+	 * Prescaler = 299
+	 * Cnt_clk = 280kHz
+	 * t_period = 3.571e-6
+	 * Period = 50e-3/t_period = 14000
+	 */
+	htimer6.Instance = TIM6;
+	htimer6.Init.Prescaler = 299;
+	htimer6.Init.Period = 14000-1;
+	if ( HAL_TIM_Base_Init(&htimer6) != HAL_OK)
 	{
 		Error_handler();
 	}
 
 }
 
-void CAN_Filter_Config(void)
+void TIMER7_Init(void)
 {
-	CAN_FilterTypeDef can1_filter_init;
+	htimer7.Instance = TIM7;
+	htimer7.Init.Prescaler = 2999;
+	htimer7.Init.Period = 28000-1;
 
-	can1_filter_init.FilterActivation = ENABLE;
-	can1_filter_init.FilterBank  = 0;
-	can1_filter_init.FilterFIFOAssignment = CAN_RX_FIFO0;
-	can1_filter_init.FilterIdHigh = 0x0000;
-	can1_filter_init.FilterIdLow = 0x0000;
-	can1_filter_init.FilterMaskIdHigh = 0X0000;
-	can1_filter_init.FilterMaskIdLow = 0x0000;
-	can1_filter_init.FilterMode = CAN_FILTERMODE_IDMASK;
-	can1_filter_init.FilterScale = CAN_FILTERSCALE_32BIT;
-
-	if( HAL_CAN_ConfigFilter(&hcan1,&can1_filter_init) != HAL_OK)
+	if ( HAL_TIM_Base_Init(&htimer7) != HAL_OK)
 	{
 		Error_handler();
 	}
-
 }
 
-
-void CAN1_Tx(uint8_t value)
+void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-	CAN_TxHeaderTypeDef TxHeader;
+	uint8_t rx_msg;		// "XX XX XX XX"
 
-	uint32_t TxMailbox;
+	if(HAL_I2C_Slave_Receive_IT(&hi2c1, &rx_msg, sizeof(rx_msg)) != HAL_OK)
+	{
+		/* Transfer error in reception process */
+		Error_handler();
+	}
 
-	uint8_t message[8];
-
-	TxHeader.DLC = 8;
-	TxHeader.StdId = 0x5B0;		// id placa 1
-	TxHeader.IDE   = CAN_ID_STD;
-	TxHeader.RTR = CAN_RTR_DATA;
-
-	switch(value){
-
-		case 0:
-			message[0]=0x0;
-			message[1]=0x0;
-			message[2]=0x1;
-			break;
-		case 1:
-			message[0]=0x0;
-			message[1]=0x1;
-			message[2]=0x1;
-			break;
-		case 4:
-			message[0]=0x0;
-			message[1]=0x2;
-			message[2]=0x1;
-			break;
-		case 5:
-			message[0]=0x0;
-			message[1]=0x3;
-			message[2]=0x1;
-			break;
-		case 6:
-			message[0]=0x0;
-			message[1]=0x4;
-			message[2]=0x1;
-			break;
-		case 8:
-			if(effect<4){
-				message[0]=0x1;
-				message[1]=effect;
-				message[2]=0x1;
-				effect++;
-			}else{
-				message[0]=0x1;
-				message[1]=effect;
-				message[2]=0x1;
-				effect=0;
+	if ((rx_msg & 0x3) == 0x0) // Single led
+	{
+		efecto_on=0;
+		if ((rx_msg & 0x1C) == 0x0) // LED 0
+		{
+			if ((rx_msg & 0x20) == 0x1)
+			{
+				HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_9);
 			}
-			break;
-		case 10:			// alarma
-			message[0]=0x2;
-			message[1]=0x0;
-			message[2]=0x1;
-			HAL_CAN_Stop(hcan1);
+		}
+
+		else if ((rx_msg & 0x1C) == 0x4) // LED 1
+		{
+			if ((rx_msg & 0x20) == 0x1)
+			{
+				HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_10);
+			}
+		}
+		else if ((rx_msg & 0x1C) == 0x8) // LED 2
+		{
+			if ((rx_msg & 0x20) == 0x1)
+			{
+				HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_11);
+			}
+		}
+		else if ((rx_msg & 0x1C) == 0xC) // LED 3
+		{
+			if ((rx_msg & 0x20) == 0x1)
+			{
+				HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_12);
+			}
+		}
+		else if ((rx_msg & 0x1C) == 0x10) // LED 4
+		{
+			if ((rx_msg & 0x20) == 0x1)
+			{
+				HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_15);
+			}
+		}
+	}
+	else if ((rx_msg & 0x3) == 0x1) // Effect
+	{
+		efecto_on=1;
+		if ((rx_msg & 0x1C) == 0x0) // Effect 0
+		{
+			efecto=0;
+		}
+		else if ((rx_msg & 0x1C) == 0x4) // Effect 1
+		{
+			efecto=1;
+		}
+		else if ((rx_msg & 0x1C) == 0x8) // Effect 2
+		{
+			efecto=2;
+		}
+		else if ((rx_msg & 0x1C) == 0xC) // Effect 3
+		{
+			efecto=3;
+		}
+	}
+	else if ((rx_msg & 0x3) == 0x2) // Alarm
+	{
+		efecto_on=0;
+		// Paramos los timers
+		HAL_TIM_Base_Stop_IT(&htimer6);
+		HAL_TIM_Base_Stop_IT(&htimer7);
+
+		// Encendemos LEDs de la placa
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
+	}
+
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM6)
+	{
+		uint8_t tx_msg;
+
+		// Transmit alarm (I2C)
+		if( HAL_GPIO_ReadPin( GPIOC, GPIO_PIN_13))
+		{
+			tx_msg=1;
+			if(HAL_I2C_Slave_Transmit_IT(&hi2c1, &tx_msg, sizeof(tx_msg)) != HAL_OK)
+			{
+				/* Transfer error in transmission process */
+				Error_handler();
+			}
+
+			// Encendemos LEDs de la placa
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
 			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
-			break;
-	}
-
-
-	if( HAL_CAN_AddTxMessage(&hcan1,&TxHeader,&message,&TxMailbox) != HAL_OK)
-	{
-		Error_handler();
-	}
-
-
-}
-
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
-{
-	uint8_t rx_msg[8];
-
-	if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&RxHeader,rx_msg) != HAL_OK)
-	{
-		Error_handler();
-	}
-
-		if(RxHeader.StdId == 0x5A0 && RxHeader.RTR == 0 )
-		{
-		//  alarm
-		if (rx_msg[0] == 0x2)
-		{
-			 HAL_CAN_Stop(hcan);
-			 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
-			 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
-			 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
 		}
-
+		else
+		{
+			tx_msg=0;
+		}
 	}
 
+	else if(htim->Instance == TIM7)
+	{
+		if(efecto_on==1) // Efecto activado
+		{
+			switch (efecto)
+			{
+
+			case 0:		// Efecto 0
+				switch(cont)
+				{
+				case 0:		// Iteración 0
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont++;
+					break;
+				case 1:		// Iteración 1
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont++;
+					break;
+				case 2:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont++;
+					break;
+				case 3:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont++;
+					break;
+				case 4:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_SET);
+					cont=0;
+					break;
+				}
+				efecto++;
+				break;
+
+			case 1:			// Efecto 1
+				switch(cont)
+				{
+				case 0:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_SET);
+					cont++;
+					break;
+				case 1:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont=0;
+					break;
+
+				}
+				efecto++;
+				break;
+
+
+			case 2:			// Efecto 2
+				switch(cont)
+				{
+				case 0:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_SET);
+					cont++;
+					break;
+				case 1:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont=0;
+					break;
+
+				}
+				efecto++;
+				break;
+
+			case 3:			// Efecto 3
+				switch(cont)
+				{
+				case 0:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_SET);
+					cont++;
+					break;
+				case 1:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont++;
+					break;
+				case 2:
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_9, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_10, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_11, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_12, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15, GPIO_PIN_RESET);
+					cont=0;
+					break;
+				}
+				efecto=0;
+				break;
+			}
+		}
+	}
 }
 
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-	if(GPIO_Pin == GPIO_PIN_15)
-	{
-		CAN1_Tx(0);
-	}
-	else if(GPIO_Pin == GPIO_PIN_1)
-	{
-		CAN1_Tx(1);
-	}
-	else if(GPIO_Pin == GPIO_PIN_4)
-	{
-		CAN1_Tx(4);
-	}
-	else if(GPIO_Pin == GPIO_PIN_5)
-	{
-		CAN1_Tx(5);
-	}
-	else if(GPIO_Pin == GPIO_PIN_6)
-	{
-		CAN1_Tx(6);
-	}
-	else if(GPIO_Pin == GPIO_PIN_8)
-	{
-		CAN1_Tx(8);
-	}
-	else if(GPIO_Pin == GPIO_PIN_8)
-	{
-		CAN1_Tx(10);
-	}
 
 
-}
 
-
-void Error_handler()
+void Error_handler(void)
 {
 	while(1);
 }
